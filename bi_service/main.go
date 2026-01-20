@@ -11,12 +11,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	// O caminho deve coincidir com o nome definido no 'go mod init'
 	pb "bi_service/proto"
 )
 
-// 1. DATA TYPES (Requisito 4: Agregação e Formatação)
-// Em vez de strings puras, retornamos um objeto com metadados calculados
 var gameSummaryType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "GameSummary",
 	Fields: graphql.Fields{
@@ -24,16 +21,14 @@ var gameSummaryType = graphql.NewObject(graphql.ObjectConfig{
 			Type:        graphql.Int,
 			Description: "O número de registos encontrados na base de dados para esta consulta.",
 		},
-		"games_xml": &graphql.Field{ // CORREÇÃO: Nome alterado para coincidir com o teu teste no Postman
+		"games_xml": &graphql.Field{ 
 			Type:        graphql.NewList(graphql.String),
 			Description: "A lista de blocos XML puros recuperados via XPath/XMLTable.",
 		},
 	},
 })
 
-// 2. GRPC CLIENT HELPER
 func getGRPCClient() (pb.SteamCatalogClient, *grpc.ClientConn, error) {
-	// Ligação ao serviço Python na rede interna do Docker
 	conn, err := grpc.Dial("xml_service:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
@@ -46,7 +41,6 @@ func initSchema() graphql.Schema {
 		Name: "Query",
 		Fields: graphql.Fields{
 
-			// QUERY 1: Filtro por Género (Atributo XPath)
 			"getGamesByGenre": &graphql.Field{
 				Type: gameSummaryType,
 				Args: graphql.FieldConfigArgument{
@@ -66,15 +60,13 @@ func initSchema() graphql.Schema {
 					})
 					if err != nil { return nil, err }
 
-					// AGREGAÇÃO E CÁLCULO (Requisito 4)
 					return map[string]interface{}{
 						"totalResults": len(resp.GamesXml),
-						"games_xml":    resp.GamesXml, // CORREÇÃO: Mapeado para o novo nome
+						"games_xml":    resp.GamesXml, 
 					}, nil
 				},
 			},
 
-			// QUERY 2: Filtro por Ano (XPath Numérico)
 			"getGamesByScore": &graphql.Field{
 				Type: gameSummaryType,
 				Args: graphql.FieldConfigArgument{
@@ -101,7 +93,6 @@ func initSchema() graphql.Schema {
 				},
 			},
 
-			// QUERY 3: Filtro por Preço Máximo (XPath Hierárquico)
 			"getGamesByPrice": &graphql.Field{
 				Type: gameSummaryType,
 				Args: graphql.FieldConfigArgument{
@@ -143,6 +134,6 @@ func main() {
 	})
 
 	http.Handle("/graphql", h)
-	log.Println("🚀 BI Service (Go) GraphQL Gateway active on http://localhost:4000/graphql")
+	log.Println("BI Service (Go) GraphQL Gateway active on http://localhost:4000/graphql")
 	log.Fatal(http.ListenAndServe(":4000", nil))
 }
