@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package steam_catalog;
+option go_package = "./proto";
+
+//service defining the 3 mandatory queries
+service SteamCatalog {
+  //query 1: Filter by attributes like Genre
+  rpc GetGamesByFilter (GameFilterRequest) returns (GameReply);
+  
+  //query 2: Filter games by year
+  rpc GetGamesByScore (ScoreRequest) returns (GameReply);
+  
+  //query 3: Filter games by a maximum Price in USD
+  rpc GetGamesByPrice (PriceRequest) returns (GameReply);
+}
+
+message GameFilterRequest {
+  map<string, string> filters = 1;
+}
+
+message ScoreRequest {
+  int32 min_score = 1;
+}
+
+message PriceRequest {
+  float max_usd = 1;
+}
+
+message GameReply {
+  repeated string games_xml = 1;
+}
