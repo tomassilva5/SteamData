@@ -1,0 +1,13 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "DB_TP3",
+            "Group": "Servers",
+            "Host": "db",
+            "Port": 5432,
+            "MaintenanceDB": "db_TP3",
+            "Username": "postgres",
+            "SSLMode": "prefer"
+        }
+    }
+}

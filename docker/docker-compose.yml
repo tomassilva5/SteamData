@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:15
+    container_name: db_tp3
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql 
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_tp3
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=tomas.silva@ipvc.pt
+      - PGADMIN_DEFAULT_PASSWORD=${DB_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=True
+    ports:
+      - "8080:80"
+    volumes:
+      - ./servers.json:/pgadmin4/servers.json
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+
+  xml_service:
+    image: tomassilva5/steam-xml-service:v1.0
+    container_name: xml_service
+    restart: always
+    depends_on:
+      - db
+    env_file: .env
+    ports:
+      - "5000:5000"
+      - "50051:50051"
+
+  data_processor:
+    image: tomassilva5/steam-processor:v1.0
+    container_name: data_processor
+    restart: always
+    depends_on:
+      - xml_service
+    env_file: .env
+    environment:
+      - XML_SERVICE_URL=http://xml_service:5000/upload
+    ports:
+      - "3000:3000"
+
+  bi_service:
+    image: tomassilva5/steam-bi-service:v1.0
+    container_name: bi_service
+    restart: always
+    depends_on:
+      - xml_service
+    env_file: .env
+    environment:
+      - XML_SERVICE_ADDR=xml_service:50051
+    ports:
+      - "4000:4000"
+
+volumes:
+  pgdata:
+  pgadmin_data:
