@@ -11,6 +11,7 @@ AUTH_TOKEN = os.getenv("AUTH_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 BUCKET_XML_INBOX = "xml_inbox"
+XSD_PATH = os.getenv("XSD_PATH", "steam_schema.xsd")  
 
 #token security validation
 if not AUTH_TOKEN:
@@ -70,6 +71,19 @@ def create_steam_xml(csv_data):
 
     return etree.tostring(root, pretty_print=True, encoding='unicode')
 
+def validate_xml(xml_string):
+    try:
+        xml_doc = etree.fromstring(xml_string.encode("utf-8"))
+        with open(XSD_PATH, "rb") as xsd_file:
+            schema_doc = etree.parse(xsd_file)
+            schema = etree.XMLSchema(schema_doc)
+            schema.assertValid(xml_doc)
+        return True, None
+    except etree.DocumentInvalid as e:
+        return False, str(e)
+    except Exception as e:
+        return False, str(e)
+
 def async_db_worker():
     while True:
         task = internal_queue.get()
@@ -81,11 +95,11 @@ def async_db_worker():
             file_data = supabase.storage.from_(BUCKET_XML_INBOX).download(filename)
             stream = io.StringIO(file_data.decode("UTF-8"))
             csv_data = list(csv.DictReader(stream))
-
+            #data validation
             valid = True
             if not csv_data:
                 logging.error(f"VALIDATION ERROR: CSV is empty for file {filename}")
-                valid = False
+                valid = False       
             for row in csv_data:
                 if not row.get("Title") or not row.get("Genre") or not row.get("ReleaseYear"):
                     logging.error(f"VALIDATION ERROR: Missing required fields in file {filename}")
@@ -109,6 +123,14 @@ def async_db_worker():
 
             xml_content = create_steam_xml(csv_data)
             
+            # XML schema validation
+            xml_valid, xml_error = validate_xml(xml_content)
+            if not xml_valid:
+                logging.error(f"XML VALIDATION ERROR: {xml_error}")
+                requests.post(task['webhook'], json={"request_id": req_id, "status": "XML_VALIDATION_ERROR"}, timeout=5)
+                internal_queue.task_done()
+                continue
+            
             #native xml persistence in postgresql
             conn = psycopg2.connect(**DATABASE_CONFIG)
             cur = conn.cursor()
@@ -120,7 +142,7 @@ def async_db_worker():
             
             #notify processor via webhook
             requests.post(task['webhook'], json={"request_id": req_id, "status": "OK", "document_id": db_id}, timeout=5)
-            
+
             logging.info(f"TASK SUCCESS: File {filename} remains in bucket for 10s inspection...")
             time.sleep(10)
             
@@ -133,7 +155,7 @@ def async_db_worker():
         
         internal_queue.task_done()
 
-@app.route('/upload', methods=['POST']) 
+@app.route('/upload', methods=['POST']) # rest endpoint for file uploads
 def handle_upload(): #file upload endpoint
     auth_header = request.headers.get('Authorization', '')
     token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else auth_header
@@ -156,7 +178,6 @@ def handle_upload(): #file upload endpoint
 class SteamCatalogServicer(steam_pb2_grpc.SteamCatalogServicer): #gRPC service implementation
     
     def GetGamesByFilter(self, request, context): 
-        #query only the latest document to prevent duplicates
         sql = """SELECT x.node::text FROM (SELECT XML_DOCUMENTO FROM SteamData ORDER BY ID DESC LIMIT 1) s, 
                  LATERAL XMLTABLE('//Game' PASSING s.XML_DOCUMENTO 
                  COLUMNS node XML PATH '.', g TEXT PATH '@Genre') AS x 
@@ -164,7 +185,6 @@ class SteamCatalogServicer(steam_pb2_grpc.SteamCatalogServicer): #gRPC service i
         return self._exec(sql, (request.filters.get("genre", ""),))
 
     def GetGamesByScore(self, request, context):
-        #bi filter based on release year attribute
         sql = """SELECT x.node::text FROM (SELECT XML_DOCUMENTO FROM SteamData ORDER BY ID DESC LIMIT 1) s, 
                  LATERAL XMLTABLE('//Game' PASSING s.XML_DOCUMENTO 
                  COLUMNS node XML PATH '.', y INTEGER PATH '@ReleaseYear') AS x 
@@ -172,7 +192,6 @@ class SteamCatalogServicer(steam_pb2_grpc.SteamCatalogServicer): #gRPC service i
         return self._exec(sql, (request.min_score,))
 
     def GetGamesByPrice(self, request, context):
-        #bi filter using hierarchical financial data path
         sql = """SELECT x.node::text FROM (SELECT XML_DOCUMENTO FROM SteamData ORDER BY ID DESC LIMIT 1) s, 
                  LATERAL XMLTABLE('//Game' PASSING s.XML_DOCUMENTO 
                  COLUMNS node XML PATH '.', p FLOAT PATH 'FinancialData/CurrentPrice') AS x 

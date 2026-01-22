@@ -1,6 +1,6 @@
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
-const axios = require('axios');
+const axios = require('axios'); //requests http 
 const csv = require('csv-parser');
 const FormData = require('form-data');
 const { Readable } = require('stream');
@@ -12,13 +12,13 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 const XML_SERVICE_URL = process.env.XML_SERVICE_URL || "http://xml_service:5000/upload";
 
-// validate required environment variables
+//validate required environment variables
 if (!AUTH_TOKEN || !SUPABASE_URL || !SUPABASE_KEY) {
     console.error("FATAL ERROR: Missing essential Environment Variables (AUTH_TOKEN, SUPABASE_URL, or SUPABASE_KEY).");
     process.exit(1); 
 }
 
-// bucket definitions used in the processing pipeline
+//bucket definitions used in the processing pipeline
 const BUCKET_INPUT = "csv_uploads";   
 const BUCKET_WORK = "work_area";     
 const BUCKET_READY = "csv_ready";    
@@ -28,7 +28,7 @@ const app = express();
 app.use(express.json());
 const pendingRequests = new Map();
 
-// converts a json array into a csv string
+//converts a json array into a csv string
 function jsonToCSV(data) {
     if (!data || data.length === 0) return "";
     const headers = ["InternalAppID", "Title", "Genre", "ReleaseYear", "PriceUSD", "ReviewCount"];
@@ -43,7 +43,7 @@ function jsonToCSV(data) {
     return [headers.join(","), ...rows].join("\n");
 }
 
-// retrieves the first valid value from multiple possible keys
+//retrieves the first valid value from multiple possible keys
 function getValue(row, keys) {
     for (let key of keys) {
         if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
@@ -53,7 +53,7 @@ function getValue(row, keys) {
     return null;
 }
 
-// webhook endpoint to receive xml service callbacks
+//webhook endpoint to receive xml service callbacks
 app.post('/callback', async (req, res) => {
     const { request_id, status } = req.body;
     console.log(`LOG: Webhook received | Request ID: ${request_id} | Status: ${status}`);
@@ -76,7 +76,7 @@ app.post('/callback', async (req, res) => {
     res.sendStatus(200);
 });
 
-// sends the processed csv to the xml service with retry logic
+//sends the processed csv to the xml service with retry logic
 async function messengerDispatch(csvContent, enrichedName, workName, retry = 0) {
     const requestId = `REQ_${Date.now()}`;
     const form = new FormData();
@@ -102,9 +102,9 @@ async function messengerDispatch(csvContent, enrichedName, workName, retry = 0) 
     }
 }
 
-// main processor loop that checks for new csv files
+//main processor loop that checks for new csv files
 async function runProcessor() {
-    const { data: files } = await supabase.storage.from(BUCKET_INPUT).list();
+    const { data: files } = await supabase.storage.from(BUCKET_INPUT).list();//list files in input bucket
     const target = files?.find(f => f.name.endsWith('.csv'));
     if (!target) return;
 

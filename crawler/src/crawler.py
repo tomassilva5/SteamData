@@ -28,7 +28,7 @@ def get_game_details(appid): #fetch technical details from the steam api
         data = res.json()
         
         if data[str(appid)]['success']:
-            details = data[str(appid)]['data']
+            details = data[str(appid)]['data']  
             
             dev = details.get('developers', ['N/A'])[0]
             pub = details.get('publishers', ['N/A'])[0]
@@ -103,7 +103,7 @@ def scrape_steam_data():
                 time.sleep(0.1) 
             
             print(f"LOG: Currently at {len(all_games)} items.")
-            if len(all_games) >= 300: break
+            if len(all_games) >= 200: break
             
         except Exception as e:
             print(f"ERROR: {e}")
@@ -112,15 +112,15 @@ def scrape_steam_data():
     return all_games
 
 def start_crawler():
-    print("STATUS: Steam technical crawler is active (Target: 300 records).")
+    print("STATUS: Steam technical crawler is active (Target: 200 records).")
     while True:
         data = scrape_steam_data()
-        if len(data) >= 300:
+        if len(data) >= 200:
             df = pd.DataFrame(data)
             csv_buf = io.StringIO()
             df.to_csv(csv_buf, index=False)
             
-            filename = f"steam_data_300_{int(time.time())}.csv"
+            filename = f"steam_data_200_{int(time.time())}.csv"
             try:
                 #upload generated csv to supabase bucket
                 supabase.storage.from_(BUCKET_NAME).upload(
